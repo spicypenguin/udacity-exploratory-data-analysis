@@ -1,0 +1,402 @@
+---
+title: "Udacity - Exploratory Data Analysis Project"
+author: "Jeff Sinclair"
+date: "15/01/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load('Metrics', 'randomForest', 'ggthemes','caret', 'psych', 'rpart', 'corrplot','e1071')
+library('ggplot2')
+library('Metrics')
+library('randomForest')
+library('ggplot2')
+library('ggthemes')
+library('dplyr')
+library('caret')
+library('psych')
+library(rpart.plot)
+library(rpart)
+library(corrplot)
+```
+
+## Red Wine Quality Exploration by Jeff Sinclair
+
+This report explores a dataset containing information regarding the quality of red wine for approximately 1,599 wines. The purpose of this exploration is to try and get a better understanding of which chemical properties influence the quality of red wines?
+
+### High level summary
+
+```{r import_wine_data}
+wine_data <- read.csv("wineQualityReds.csv")
+summary(wine_data)
+```
+
+The summary of the wine data confirms we have 1,599 wine samples that the analysis will be based on, with 12 attributes for each wine. Our target variable of interest is quality as we want to determine if there are other features in the data set that are particularly correlated to a higher or lower quality of wine.
+
+```{r}
+names(wine_data)
+```
+
+It looks as though some scaling will be required as the range of values for free.sulfur.dioxide and total.sulfur.dioxide seem to be on a drastically different scale than the remainder.
+
+Let's look at the distribution of wine quality over the data set.
+
+### Quality data distribution
+
+```{r quality histogram}
+hist(wine_data$quality)
+```
+
+The histogram demonstrates that the wine samples roughly follow a normal distribution, with the majority of wines scoring a 5 or a 6 on the quality scale. This is confirmed from the summary above showing the mean of 5.636 and median of 6. Interestingly no wines scored a 9 or 10, and nothing scored below a 3. I wonder if this is due to some inherent bias from the individual assigning quality scores, of not wanting to grossly over or under mark any wines that they tested.
+
+The bias in this data toward the middle of the quality curve is likely to mean that we can find predictors of mid quality wine, but not necessarily high quality (as the data will be too sparse to effectively identify high quality wines).
+
+### Looking into the attributes available
+
+So, on to looking for the magic ingredients that make wine "good" quality.
+
+Maybe more alcoholic wines are considered of higher quality? I will look at these two features plotted against each other to see if there is any association between the two.
+
+```{r}
+ggplot(aes(x=quality, y=alcohol), data=wine_data) +
+  geom_jitter(alpha = 1/5)
+```
+
+This plot indicates there is a weak relationship between alcohol content and quality of wine, as alcohol content increases there is a moderate relationship to higher quality wines (with very low quality wines all being relatively low alcohol content). However this does not visually appear to be highly correlated as there is a wide distribution of strength and quality once the quality score reaches 5 or greater.
+
+Based on the [descriptive information](https://s3.amazonaws.com/udacity-hosted-downloads/ud651/wineQualityInfo.txt) that helps readers understand what these different features relate to, there are some other potential characteristics of interest.
+
+Let's explore the relationship between quality and volatile acidity. Based on the descriptive information we should expect to see a ceiling on quality once volatile acidity reaches over a given amount.
+
+```{r}
+ggplot(aes(x=quality, y=volatile.acidity), data=wine_data) +
+  geom_jitter(alpha = 1/5)
+```
+
+There is definitely a trend here, with very few wines having more than 0.8 gm of acetic acid in the highest quality buckets - but interestingly not many wines in general seem to be over this level (even the lowest quality wines).
+
+Next I want to look at residual sugar levels, to see if sweet red wine is considered higher quality than dry red wine.
+
+```{r}
+ggplot(aes(x=quality, y=residual.sugar), data=wine_data) +
+  geom_jitter(alpha = 1/5) 
+```
+
+
+It looks as though the higher the quality wine will contain less residual sugar - indicating that sweet red wines are not considered to be of high quality. What about chlorides / salt? It would seem that salty wine is not desirable, so I think that we'll see low salt in wine across the board regardless of quality level.
+
+```{r}
+ggplot(aes(x=quality, y=chlorides), data=wine_data) +
+  geom_jitter(alpha = 1/5)
+```
+
+### Using boxplots to explore the distribution of data, vs. a jitter plot
+
+As expected, the highest quality wines all have very low levels of chlorides. The interesting part is that mid quality wines seem to have the highest salt levels compared to even the lower quality wines (see the upper bound on quality 5). I want to look at this as a boxplot to see if that shows a better story of the distribution of this particular feature.
+
+```{r}
+ggplot(aes(x=quality, y=chlorides, group=quality), data=wine_data) +
+  geom_boxplot()
+```
+
+The box plot clearly shows the mid tier wines having significant outliers in terms of salt content (mostly in a negative direction). This is very interesting, and seems like it could be a candidate for an ingredient to move a mid tier wine to a top tier wine (controlled salt content).
+
+Continuing the investigation of individual attributes related to quality, next I want to look at the different types of sulfur and their relationship to quality.
+
+First free sulfur dioxide:
+
+```{r}
+ggplot(aes(x=quality, y=free.sulfur.dioxide), data=wine_data) +
+  geom_jitter(alpha = 1/5)
+```
+
+And total sulfur dioxide:
+```{r}
+ggplot(aes(x=quality, y=total.sulfur.dioxide), data=wine_data) +
+  geom_jitter(alpha = 1/5)
+```
+
+Again, similar trends as would be expected based on the descriptive information provided about these attributes. Higher quality wines generally seem to have a lower quantity of sulfur dioxide (either free or total), however there are wines at lower quality levels that have the same amount of sulfur - so that is indicative that this is not a silver bullet.
+
+What about density of the water or pH level of the wine?
+
+Water density:
+```{r}
+ggplot(aes(x=quality, y=density), data=wine_data) +
+  geom_jitter(alpha = 1/5)
+```
+
+pH level:
+```{r}
+ggplot(aes(x=quality, y=pH), data=wine_data) +
+  geom_jitter(alpha = 1/5)
+```
+
+Neither density or pH seem to have a strong relationship with quality; both attributes are fairly distributed for high quality wines and there is no strong trend that can be drawn (positive or inverse) vs. wine quality based on these plots.
+
+Finally I want to look at the level of sulphates in the wine:
+```{r}
+ggplot(aes(x=quality, y=sulphates), data=wine_data) +
+  geom_jitter(alpha = 1/5)
+```
+
+Again this plot seems to indicate there is a small relationship between quality and amount of sulphates (there should be a little, but not a lot, somewhere in the 0.75 range).
+
+### Introducing multiple variables into the plots
+
+Based on all these individual features vs. quality plots - there is no standout "golden bullet" that is required to make a wine high quality. There are things that should be avoided (such as high salt content) but no one thing that will give a high quality wine - which is generally what I had expected before starting this analysis given the complexity of the subject area.
+
+Therefore we need to look at multiple elements in combination to see if there are groups of attributes that do have a direct impact on the quality of wine.
+
+```{r}
+ggplot(aes(x=quality, y=chlorides), data=wine_data) +
+  geom_jitter(aes(color = alcohol))
+```
+
+This plot is now starting to get interesting. Showing the relationship between the amount of chlorides (which we already knew was lower for high quality wines), and alcohol content. We can see an increasing relationship between the high alcohol content wines (shown by the lighter dots), combined with low chlorides.
+
+I broke out the jitter plot to try and add more insight into what was happening in the over crowded 5/6 quality zone.
+
+Let's see what other relationships exist.
+
+```{r}
+ggplot(aes(x=fixed.acidity, y=volatile.acidity), data=wine_data) +
+  geom_jitter(aes(color = quality))
+```
+
+### Using size instead of color
+
+This plot seems like it could be interesting, but it is really difficult to unpack the quality value using color. Maybe I could try using size instead?
+
+```{r}
+ggplot(aes(x=fixed.acidity, y=volatile.acidity), data=wine_data) +
+  geom_jitter(aes(size = quality))
+```
+
+Hm, that doesn't seem to be useful. 
+
+### Using facets
+
+Let's use facets instead of a visual determinant to help visually separate the different quality categories
+
+```{r}
+ggplot(aes(x=fixed.acidity, y=volatile.acidity), data=wine_data) +
+  geom_point(alpha=1/2) +
+  facet_grid(~ quality) + 
+  ylim(0, 2) +
+  xlim(4, 17)
+```
+
+The graphs above show that there is a tighter clustering of volatile acidity (confirming what we had looked at previously as an independent variable), however fixed acidity does not seem to have such a direct correlation to quality of wine.
+
+```{r}
+ggplot(aes(x=residual.sugar, y=chlorides), data=wine_data) +
+  geom_point(alpha=1/2) +
+  facet_grid(~ quality)
+```
+
+Similar story here, residual sugar and chlorides must be low for a high quality wine. There is not a huge difference in clustering in a quality 8 wine even when compared to the quality 4 wines though.
+
+```{r}
+ggplot(aes(x=total.sulfur.dioxide, y=free.sulfur.dioxide), data=wine_data) +
+  geom_point(alpha=1/2) +
+  facet_grid(~ quality)
+```
+
+These features do not seem to be important toward quality detection. The pattern and the relationship of sulfur dioxide levels is pretty consistent between low and high quality wines (high quality wines are more clustered, but there are also less wines at this level).
+
+```{r}
+ggplot(aes(x=sulphates, y=citric.acid), data=wine_data) +
+  geom_point(alpha=1/2) +
+  facet_grid(~ quality)
+```
+
+```{r}
+ggplot(aes(x=pH, y=alcohol), data=wine_data) +
+  geom_point(alpha=1/2) +
+  facet_grid(~ quality)
+```
+
+
+### Using a data model to find the correlated features
+
+Ok. So all of the plots that I've built so far have given some insight into potentially correlated features to quality wine. However I'd like to explore whether we can use a correlation function to more scientifically identify the features that are most correlated with a high quality wine.
+
+I decided to try and train a random forest model to attempt to select the most important features in the wine data for high quality wine. Based on the output of this, I can continue plotting these features to have better insights into my data.
+
+```{r}
+set.seed(101)
+
+# change the quality attribute to a factor (used for prediction)
+wine_data$quality <- factor(wine_data$quality)
+
+# partition the data into a 70/30 split
+testIndex = createDataPartition(wine_data$quality, p = 0.30, list = FALSE)
+
+# using the partition, split the training and testing data
+training <- wine_data[-testIndex, ]
+test <- wine_data[testIndex, ]
+
+# train the model using the cut out training data
+# use a multi-fold model (break the training data into 3 random sets and train the model 3 times to find the optimal fit)
+model_rf <- train(quality ~ ., data = training, method = "rf", importance = T, trControl = trainControl(method = "cv", number = 3))
+
+# use the testing data against the trained model to validate the models effectiveness
+test_model <- predict(model_rf, newdata = test)
+
+# build a confusion matrix to show the effectivenss of the model by target class
+cfMatrix <- confusionMatrix(data = test_model, test$quality)
+
+# show the basic model accuracy stats
+print(model_rf, digits = 4)
+
+```
+
+Thhis is showing that the model is somewhat predictive (averaging at ~0.61), which is ok but not great. What about if we look at this on a per-quality level?
+
+```{r}
+# Print out the confusion matrix to understand whether the model is predicting well for all classes or just a few
+print(cfMatrix, digits = 4)
+```
+
+The two metrics of interest are sensitivity and specificity - sensitivity being the rate of true positives as a ratio of all positivies, and specificity being the rate of true negatives as a rate of all negatives.
+
+This output indicates that this model is best geared for predicting a quality 5 or 6 wine, and it is very good at predicting what is NOT the other classes of wines, but no so good at predicting what is (e.g. 0.997 specificity for quality = 8, but 0.07 sensitivity).
+
+This is likely due to the large amounts of bias in the data toward those middle classes, meaning these is simply a lot more data available for the model to be trained off in class 5 and 6, and not as much to work with for the other classes. If the data was more evenly distributed then the output would likely be improved.
+
+
+### Feature importance
+
+What features is the model selecting in predicting the quality of a wine? This will help ensure that I'm looking at the right elements in my final plots.
+
+```{r}
+# Plot the importance of each feature in the model
+plot(varImp(model_rf))
+```
+
+Looking at a graph of feature importance, it looks by far like the most important feature is alcohol content, followed by sulphates and volatile.acidity. However the features in the dataset are much more likely to be predictors for whether a wine is medium quality - rather than low or high quality (which is interesting).
+
+Based on a fresh perspective from this model, let's replot alcohol content and sulphates against each other.
+
+```{r}
+# Have to reload the data as conversion of the target output to a factor breaks things
+wine_data <- read.csv("wineQualityReds.csv")
+
+ggplot(aes(x=alcohol, y=sulphates), data=wine_data) +
+  geom_point(alpha=1/10) +
+  facet_grid(~ quality)
+```
+
+The feature importance in the graph would seem to be highlighting the cluster of low alcohol wines that are in the "5" quality bucket; likely the thing that the random forest model picked up on (that lower alcohol wines are correlated to a 5 or 6 quality wine based on this data set).
+
+Finally to make sure that we haven't missed anything, a quick plot of the pearson correlation of all the attributes in our model to ensure that we haven't missed any valuable plots before we move into the final analysis.
+
+```{r}
+corrplot(cor(wine_data, method="pearson"))
+```
+
+I think based on the analysis done so far in this project, I can now start to finalise my plots and draw some conclusions.
+
+## Final Plots and Summary
+
+Let's start by re-iterating the purpose of this data exploration: 
+
+> Which chemical properties influence the quality of red wines?
+
+The best way to start answering a question such as the one above, is to look at the relative correlations of all the feautres in the dataset available, plotted against each other. However more than what I did in the plot above, we should ensure that the chart is visually representative of the hotspots of correlation and whether the correlations are significant (statistically) or not.
+
+```{r}
+cor.mtest <- function(mat, ...) {
+    mat <- as.matrix(mat)
+    n <- ncol(mat)
+    p.mat<- matrix(NA, n, n)
+    diag(p.mat) <- 0
+    for (i in 1:(n - 1)) {
+        for (j in (i + 1):n) {
+            tmp <- cor.test(mat[, i], mat[, j], ...)
+            p.mat[i, j] <- p.mat[j, i] <- tmp$p.value
+        }
+    }
+  colnames(p.mat) <- rownames(p.mat) <- colnames(mat)
+  p.mat
+}
+
+p.mat <- cor.mtest(wine_data)
+
+corrplot(
+    cor(wine_data, method="pearson"),
+    method="color", 
+    type="upper", 
+    p.mat = p.mat, 
+    sig.level = 0.01,
+    tl.srt=45,
+    tl.col="black",
+    order="hclust",
+    diag=FALSE
+)
+```
+
+The chart above highlights that there are a handful of features positively correlated with wine quality, namely:
+
+1. Alcohol Content
+2. Citric Acid content
+3. Sulphates
+4. Fixed Acidity of the wine
+
+In addition, there are some features that are negatively correlated with the quality of the wine:
+
+1. Volatile Acidity
+2. Density
+3. Total Sulfur Dioxide
+4. Chlorides
+
+From my earlier analysis, there was an interesting relationship present between the Alcohol content, the Sulphates in the wine, and the quality score attained. Let's visualise that relationship:
+
+```{r}
+ggplot(aes(x=alcohol, y=sulphates), data=wine_data) +
+  geom_jitter(aes(color=citric.acid)) +
+  facet_grid(~ quality) +
+  labs(
+    title = "Alcohol Content + Sulphates + Citric Acid by Quality",
+    x = "Alcohol (% by volume)", 
+    y = expression(paste("Potassium Sulphate (g / dm"^"3", ")")),
+    color = expression(paste("Citric Acid (g / dm"^"3", ")"))
+  )
+```
+
+The plot above shows a relationship between all the provided attributes - we can see as wine quality is increasing that there is an increasing amount of citric acid (however not reaching the top of the citric acid range, settling between 0.50 and 0.75 g/dm^3), a similar amount of potassium sulphate and at least 12% alcohol by volume.
+
+Similarly, we can plot the features that were negatively correlated with quality to see how that differs on a plot:
+
+```{r}
+ggplot(aes(x=volatile.acidity, y=total.sulfur.dioxide), data=wine_data) +
+  geom_jitter(aes(color=density)) +
+  facet_grid(~ quality) +
+  labs(
+    title = "Volatile Acidity + Total Sulfur Dioxide + Density by Quality",
+    x = expression(paste("Volatile Acidity (g / dm"^"3", ")")),
+    y = expression(paste("Total Sulfur Dioxide (mg / dm"^"3", ")")),
+    color = expression(paste("Density (g / cm"^"3", ")"))
+  )
+```
+
+The plot above demonstrates the less correlated features, with higher sulfur dioxide content, higher volatile acidity or higher denisty values being associated with lower quality wines. Note that as with the results noted previously from the Random Forest model employed during my initial analysis, it is possible that the skew in the sample data is affecting these results.
+
+That is, it is possible that due to the lower quantity of "high quality" wines, that we are missing out on correlating these features with high quality wines purely due to the sparsity of data.
+
+So in conclusion, if a wine maker would like to ensure their wines are of high quality - there is unfortunately no silver bullet. The US wine market is responsible for approximately [$220bn worth of value each year](http://www.winespectator.com/webfeature/show/id/How-Much-Is-Americas-Wine-Industry-Worth) toward the american economy - so it stands to reason this is a complicated problem.
+
+The analysis above highlights if you want to improve quality there are 6-8 features of your wine that you can double down on which will maximise your chances of producing a good wine, so get mixing!
+
+## Reflection
+
+On reflection after completing this analysis I learnt a few things. First, I think the stream of consciousness was good but would have benefited from an hour or so of planning before I jumped headfirst into building visualisations. In addition the correlation matrix and ML model would have been a good place to start to help guide the plots, rather than the other way around.
+
+The most challening part in drawing conclusions was the data was relatively sparse at either extreme, with a lot of data clusterers aroun the 5 and 6 quality mark. This makes prediction hard as roads point to the "5" or "6" quality categorisation. If I was repeating this, it would be good to do so on a much larger data set (if possible) - the white wine data set for example had 4x the amount of data so could be a good candidate to run over with a similar analytical process.
+
+In addition, due to the sparsity of the data it maybe useful to use a different train/test split model that favours the sparsity of the data. The current model may be subject to overfitting as the data extracted could potentially be heavily biased towards certain buckets (likely 5 or 6). It would be better if we could evenly sample 80/20 from each bucket.
+
+Finally it would have been faster to complete this project if I had done so around the same time as I finished the course material; as it stands it has been a few months since I did the course work so I was a bit rusty getting started with R again (although reviewing my old class work helped a lot in this respect).
