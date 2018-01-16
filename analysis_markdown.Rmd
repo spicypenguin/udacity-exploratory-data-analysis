@@ -254,7 +254,7 @@ print(model_rf, digits = 4)
 
 ```
 
-Thhis is showing that the model is somewhat predictive (averaging at ~0.61), which is ok but not great. What about if we look at this on a per-quality level?
+Thhis is showing that the model is somewhat predictive (averaging at ~0.69), which is ok but not great. What about if we look at this on a per-quality basis?
 
 ```{r}
 # Print out the confusion matrix to understand whether the model is predicting well for all classes or just a few
@@ -263,7 +263,7 @@ print(cfMatrix, digits = 4)
 
 The two metrics of interest are sensitivity and specificity - sensitivity being the rate of true positives as a ratio of all positivies, and specificity being the rate of true negatives as a rate of all negatives.
 
-This output indicates that this model is best geared for predicting a quality 5 or 6 wine, and it is very good at predicting what is NOT the other classes of wines, but no so good at predicting what is (e.g. 0.997 specificity for quality = 8, but 0.07 sensitivity).
+This output indicates that this model is best geared for predicting a quality 5 or 6 wine, and it is very good at predicting what is NOT the other classes of wines, but no so good at predicting what is (e.g. 1.000 specificity for quality = 8, but 0.167 sensitivity).
 
 This is likely due to the large amounts of bias in the data toward those middle classes, meaning these is simply a lot more data available for the model to be trained off in class 5 and 6, and not as much to work with for the other classes. If the data was more evenly distributed then the output would likely be improved.
 
@@ -393,10 +393,10 @@ The analysis above highlights if you want to improve quality there are 6-8 featu
 
 ## Reflection
 
-On reflection after completing this analysis I learnt a few things. First, I think the stream of consciousness was good but would have benefited from an hour or so of planning before I jumped headfirst into building visualisations. In addition the correlation matrix and ML model would have been a good place to start to help guide the plots, rather than the other way around.
+The red wine data set contained 1599 data samples covering 13 variables from around 2009. I started out looking at what variables were available in the dataset, and looking at the distribution of my data. Then based on the descriptive text provides about the attributes I started exploring the data to see if there were any immediately obvious relationships between the features and quality of the wine. After bottoming out individual features, I then started exploring pairs of features and did start to notice more trends emerging.
 
-The most challening part in drawing conclusions was the data was relatively sparse at either extreme, with a lot of data clusterers aroun the 5 and 6 quality mark. This makes prediction hard as roads point to the "5" or "6" quality categorisation. If I was repeating this, it would be good to do so on a much larger data set (if possible) - the white wine data set for example had 4x the amount of data so could be a good candidate to run over with a similar analytical process.
+I then took a turn in my analysis and decided to use a more data driven approach, opting to build a simple ML model (using a random forest predictor) to try and classify the data based on the available features and highlight which features were the most predictive of quality. The model had varying levels of success, mainly due to the highly sparse data, and was more predictive for 5/6 quality wines rather than all wines.
 
-In addition, due to the sparsity of the data it maybe useful to use a different train/test split model that favours the sparsity of the data. The current model may be subject to overfitting as the data extracted could potentially be heavily biased towards certain buckets (likely 5 or 6). It would be better if we could evenly sample 80/20 from each bucket.
+Using a data driven approach seemed to work well, and helped rather than manually exploring all the potential pairs of features in the data set. However to improve the data set would need to be larger (ideally updated from 2009 to current date), so we could have more data and potentially even examine the trend in quality vs. chemical composition over time as potentially tastes have changed in the last 8-9 years.
 
-Finally it would have been faster to complete this project if I had done so around the same time as I finished the course material; as it stands it has been a few months since I did the course work so I was a bit rusty getting started with R again (although reviewing my old class work helped a lot in this respect).
+More data would help here as the sparsity of the data set and bias toward the middle quality tiers causes the data to be less predictive (e.g. the model will say most things are a 5 or 6, because most things _were_ a 5 or 6 in the provided data).
